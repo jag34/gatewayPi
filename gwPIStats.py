@@ -166,7 +166,6 @@ class GwPiMonitor(object):
             fs_usage = FSUsage(fs[0], fs[1], fs[2], fs[3], fs[4], fs[5] )
             self.fs_usages.append(fs_usage)
 
-
 class UnitTesTGwMonitor(unittest.TestCase):
 
     @classmethod
