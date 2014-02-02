@@ -4,6 +4,7 @@ import pygal
 import unittest
 import datetime
 import os
+import calendar
 __author__ = 'jag'
 USAGE_DB='/etc/sqlite3/usage.db'
 PORT_FWD_DB='/etc/sqlite3/portfwd.db'
@@ -16,9 +17,16 @@ class Rule(object):
 
 class DataUsage(object):
 
-    def __init__(self, rx, tx):
+    def __init__(self, rx, tx, date=None):
+        self.date = date
         self.rx = rx
         self.tx = tx
+
+    def __eq__(self, other):
+        return self.date == other.date
+
+    def __str__(self):
+        return str(self.date)+" "+str(self.rx)+","+str(self.tx)
 
 class PortFwdingManager(object):
 
@@ -59,58 +67,102 @@ class PortFwdingManager(object):
 class UsageManager(object):
     def __init__(self, filename=USAGE_DB):
         create_db = False
+
         if not os.path.exists(filename):
             os.mknod(filename)
             create_db = True
-        sqlite3.register_adapter(datetime.datetime, UsageManager._adapt_datetime)
+
         self.db_conn = sqlite3.connect(filename)
         self.cursor = self.db_conn.cursor()
         self.table_name = 'usage'
+        self.records = []
 
         if create_db:
             self.cursor.execute('''CREATE TABLE {table} (day Date, download INT, upload INT)'''.format(table=self.table_name))
             self.db_conn.commit()
 
-    def _insertToDB(self, datausage):
+    def _insertToDB(self, datausage, time):
         ret = True
-        now = time.time()
+        now = time
         try:
-            self.cursor.execute("INSERT INTO {table} VALUES ( '{now}', {tx} , {rx} );".format(table=self.table_name,
+            self.cursor.execute("INSERT INTO {table} VALUES ( '{now}', {rx} , {tx} );".format(table=self.table_name,
                                                                                                    now=now,
-                                                                                                   tx=datausage.tx,
-                                                                                                   rx=datausage.rx))
+                                                                                                   tx=datausage.rx,
+                                                                                                   rx=datausage.tx))
             self.db_conn.commit()
         except:
             ret = False
 
         return ret
 
-    def _adapt_datetime(ts):
-        return time.mktime(ts.timetuple())
-
-    def addUsage(self, rx, tx):
+    def addUsage(self, rx, tx, time=time.time()):
         new_usage = DataUsage(rx, tx)
-        return self._insertToDB(new_usage)
+        return self._insertToDB(new_usage, time)
 
     def close(self):
         self.cursor.close()
         self.db_conn.close()
 
     def draw_usage_chart(self):
-        #chart = pygal.Line(style=pygal.LightStyle)
-        now = datetime.datetime.now()
+        chart = pygal.Line(style=pygal.style.LightStyle)
+        chart.title = "Data Usage in MB"
         self.cursor.execute("select * from {table} where day > strftime('%s','now','-7 day');".format(table=self.table_name))
-        #self.cursor.execute("SELECT ?", (now,))
 
         query_res = self.cursor.fetchone()
-
         while query_res is not None:
             date = query_res[0]
             tx = query_res[1]
             rx = query_res[2]
 
             print date
+            record_date = datetime.datetime.fromtimestamp(date)
+            print record_date
+            record = DataUsage(rx, tx, record_date)
+            self.records.append(record)
             query_res = self.cursor.fetchone()
+
+        rx = []
+        tx = []
+        day = 0
+        graph_record = None
+        if len(self.records) < 25:
+            # make a list for a single day records
+            range_start = self.records[0].date.hour
+            range_end = self.records[-1].date.hour
+            chart.x_labels = map(str, range(range_start, range_end+1))
+            for record in self.records:
+                rx.append(record.rx/pow(2,12))
+                tx.append(record.tx/pow(2,12))
+
+        else:
+            range_start = self.records[0].date.day
+            range_end = self.records[-1].date.day
+            chart.x_labels = map(str, range(range_start, range_end+1))
+            for record in self.records:
+                if day == 0:
+                    # First record
+                    graph_record = record
+                elif day == record.date.day:
+                    # Records within the same day.
+                    graph_record.rx += record.rx
+                    graph_record.tx += record.tx
+                elif day != record.date.day:
+                    # New record with a different day.
+                    rx.append(graph_record.rx/pow(2,12))
+                    tx.append(graph_record.tx/pow(2,12))
+
+                    graph_record = record
+                    day += 1
+
+                # Insert the updated record in case it's
+                # the last one in the list.
+                if record == self.records[len(self.records)-1]:
+                    rx.append(graph_record.rx/pow(2,12))
+                    tx.append(graph_record.tx/pow(2,12))
+
+        chart.add('Rx', rx)
+        chart.add('Tx', tx)
+        chart.render_to_file('line_chart.svg')
 
 class DBUnitTest(unittest.TestCase):
 
@@ -131,10 +183,13 @@ class DBUnitTest(unittest.TestCase):
         self.assertTrue(os.path.exists("usage.db"))
 
     def test_binsert_usage(self):
-        self.assertTrue(self.usage_mgr.addUsage(8220, 12334))
-        self.assertTrue(self.usage_mgr.addUsage(111, 23451))
-        self.assertTrue(self.usage_mgr.addUsage(23511, 112312312334))
-        self.assertTrue(self.usage_mgr.addUsage(82123420, 121231334))
+        self.assertTrue(self.usage_mgr.addUsage(7263232, 643072, calendar.timegm(datetime.datetime(2014,01,31,12).timetuple())+(5*60*60)))
+        self.assertTrue(self.usage_mgr.addUsage(3056640, 360448,calendar.timegm(datetime.datetime(2014,01,31,13).timetuple())+(5*60*60)))
+        self.assertTrue(self.usage_mgr.addUsage(434110464, 9245696, calendar.timegm(datetime.datetime(2014,01,31,14).timetuple())+(5*60*60)))
+        self.assertTrue(self.usage_mgr.addUsage(1634729984, 23068672, calendar.timegm(datetime.datetime(2014,01,31,15).timetuple())+(5*60*60)))
+        self.assertTrue(self.usage_mgr.addUsage(1378877440, 25165824, calendar.timegm(datetime.datetime(2014,01,31,16).timetuple())+(5*60*60)))
+        self.assertTrue(self.usage_mgr.addUsage(524288000, 12582912, calendar.timegm(datetime.datetime(2014,01,31,17).timetuple())+(5*60*60)))
+        self.assertTrue(self.usage_mgr.addUsage(465567744, 12582912, calendar.timegm(datetime.datetime(2014,01,31,18).timetuple())+(5*60*60)))
 
     def test_cinsert_route(self):
         route = Rule(80, '10.0.1.1')
@@ -143,6 +198,6 @@ class DBUnitTest(unittest.TestCase):
     def test_draw_chart(self):
         self.usage_mgr.draw_usage_chart()
 
-suite = unittest.TestSuite()
-suite.addTest(unittest.makeSuite(DBUnitTest))
-unittest.TextTestRunner(verbosity=3).run(suite)
+#suite = unittest.TestSuite()
+#suite.addTest(unittest.makeSuite(DBUnitTest))
+#unittest.TextTestRunner(verbosity=3).run(suite)
