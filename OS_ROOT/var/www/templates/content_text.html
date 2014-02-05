@@ -1,0 +1,167 @@
+<%!
+    import sys
+    sys.path.append('/usr/lib/cgi-bin')
+
+    from gwPIStats import FSUsage, RouterClient, GwPiMonitor
+    
+    monitor = GwPiMonitor()
+%>
+% if page_type == 'pfwding':
+<h3>
+    Port Forwading Rules
+    <small>Allow programs through GW Pi firewall.</small>
+</h3>
+% elif page_type == 'sys_stat':
+<%
+    monitor.get_cpu_usage()
+    cpu_usage = monitor.cpu_usage
+    monitor.get_mem_usage()
+    monitor.get_up_time() 
+%>
+<h3>
+    Current Status
+    <small>State of the GW</small>
+    <p>
+        <dl>
+            <dt> CPU </dt>
+            <dd>
+                <table>
+                    <thead>
+                        <tr>
+                            <th> CPU </th>
+                            <th> Usage </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        % for cpu in range(len(cpu_usage)):
+                            <tr>
+                                <td> ${cpu} </td>
+                                <td> ${cpu_usage[cpu]}% </td>
+                            </tr>
+                        % endfor
+                    </tbody>
+                </table>
+            </dd>
+        </dl>
+    </p>
+    <p>
+        <dl>
+            <dt>Memory</dt>
+            <dd>
+                <table>
+                    <thead>
+                        <tr>
+                            <th> Used </th>
+                            <th> Avail </th>
+                            <th> % Used </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td> ${monitor.mem_used}MB  </td>
+                            <td> ${monitor.mem_available}MB </td>
+                            <td> ${monitor.mem_percent_usage} </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </dd>
+        </dl>
+    </p>
+    <p>
+        <dl>
+            <dt> Uptime </dt>
+            <dd> ${monitor.up_time_str} </dd>
+        </dl>
+    </p>
+</h3>
+% elif page_type == 'usr_list':
+<%
+    monitor.connected_clients()
+    users = monitor.dhcp_clients
+%>
+<h3>
+    Online Users
+    <small>User list</small>
+    <br>
+    <p>
+        <table>
+            <thead>
+                <tr>
+                    <th> Hostname </th>
+                    <th> IP </th>
+                    <th> MAC </th>
+                    <th> Status </th>
+                </tr>
+            </thead>
+            % for user in users:
+            <tbody>
+                <tr>
+                    <td> ${user.hostname} </td>
+                    <td> ${user.ip} </td>
+                    <td> ${user.mac} </td>
+                    % if user.up:
+                    <td><span class="round success label"> ONLINE </span> </td>
+                    % else:
+                    <td> <span class="round alert label">OFFLINE</span> </td>
+                    % endif
+                </tr>
+            </tbody>
+            % endfor
+        </table>
+    </p>
+</h3>
+% elif page_type == 'usage_stats':
+<h3>
+    Usage
+    <small>Data usage</small>
+</h3>        
+% else:
+<%
+    connected = monitor.get_connected_status()
+    wapStatus = monitor.get_wap_status()
+    ip = monitor.get_net_status()
+    clients = monitor.connected_clients()
+%>
+<h3>
+    Gateway Pi 
+    <small>Summary</small>
+</h3>
+    <dl>
+        <dt>Network Status</dt>
+        % if connected:
+            <dd><span class="round success label">ONLINE</span></dd>
+        % else:
+            <dd><span class="round alert label">OFFLINE</span></dd>
+        % endif
+    </dl>
+    <dl>
+        <dt>WAP Status<dt>
+        % if wapStatus:
+            <dd><span class="round success label">ONLINE</span></dd>
+        % else:
+            <dd><span class="round alert label">OFFLINE</span></dd>
+        % endif
+    </dl>
+    <dl>
+        <dt> IP Address </dt>
+        <!-- Change these to buttons to later on show info on the IP? -->
+        % if connected:
+        <dd><a href="http://www.infobyip.com/ip-${ip}.html"><span class="round success label">${ip}</span></a></dd>
+        % else:
+            <dd><span class="round alert label">OFFLINE</span></dd>
+        % endif
+    </dl>
+    <dl>
+        <dt>Connected Clients</dt>
+        <dd>${clients}</dd>
+    </dl>
+<%
+    if clients < 3:
+        src_img = '../images/tired_doge.jpg'
+    elif clients < 7:
+        src_img = '../images/doge.png'
+    else:
+        src_img = '../images/doge.gif'
+%>
+    <img src="${src_img}">
+% endif
