@@ -86,8 +86,21 @@ class GwPiMonitor(object):
             lease = lease.split(' ')
             lease = filter(lambda x: x!='', lease)
 
-            client = RouterClient(lease[0], lease[1], lease[2], lease[3] == 'expired')
-            self.dhcp_clients.append(client)
+
+            mac = lease[0]
+            ip_addr = lease[1]
+            if len(lease) > 3:
+                host_name = lease[2]
+                expired = lease[3] == 'expired'
+            else:
+                # Turns out, this one can sometimes be empty, because udhcp feels like it.
+                # so this field might end up being a date...
+                host_name = 'unknown'
+                expired = lease[2] == 'expired'
+
+            if not expired:
+                client = RouterClient(mac, ip_addr, host_name,expired)
+                self.dhcp_clients.append(client)
 
     def get_net_status(self, ifname='eth0'):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -207,6 +220,7 @@ class UnitTesTGwMonitor(unittest.TestCase):
         print clients
         self.assertTrue(clients > 0 )
 
-#suite = unittest.TestSuite()
-#suite.addTest(unittest.makeSuite(UnitTesTGwMonitor))
-#unittest.TextTestRunner(verbosity=3).run(suite)
+if __name__ == '__main__':
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.makeSuite(UnitTesTGwMonitor))
+    unittest.TextTestRunner(verbosity=3).run(suite)

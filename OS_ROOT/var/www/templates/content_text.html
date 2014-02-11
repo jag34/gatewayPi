@@ -1,10 +1,12 @@
 <%!
     import sys
-    sys.path.append('/usr/lib/cgi-bin')
+    sys.path.append('/opt/scripts/gatewayPi/')
 
     from gwPIStats import FSUsage, RouterClient, GwPiMonitor
+    from DBOperations import UsageManager
     
     monitor = GwPiMonitor()
+    usage_manager = UsageManager()
 %>
 % if page_type == 'pfwding':
 <h3>
@@ -111,10 +113,16 @@
     </p>
 </h3>
 % elif page_type == 'usage_stats':
+<%
+    usage_manager.draw_usage_chart('/var/www/images/line_chart.svg')
+%>
 <h3>
     Usage
     <small>Data usage</small>
-</h3>        
+</h3>
+<figure>
+    <embed type="image/svg+xml" src="../images/line_chart.svg" />
+</figure>
 % else:
 <%
     connected = monitor.get_connected_status()
